@@ -1,0 +1,144 @@
+from flask import Flask, render_template, request, redirect
+import sqlite3
+
+app = Flask(__name__)
+
+# ------------------------
+# INICIAR BANCO DE DADOS
+# ------------------------
+def init_db():
+    conn = sqlite3.connect("banco.db")
+    c = conn.cursor()
+
+    # Tabela de Pacientes
+    c.execute("""
+        CREATE TABLE IF NOT EXISTS pacientes (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            nome TEXT,
+            telefone TEXT,
+            cpf TEXT,
+            email TEXT
+        )
+    """)
+
+    # Tabela de Consultas
+    c.execute("""
+        CREATE TABLE IF NOT EXISTS consultas (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            paciente_id INTEGER,
+            data TEXT,
+            hora TEXT,
+            especialidade TEXT,
+            FOREIGN KEY(paciente_id) REFERENCES pacientes(id)
+        )
+    """)
+
+    conn.commit()
+    conn.close()
+
+
+# -----------------------------------------
+# ROTAS DO SISTEMA (TELAS)
+# -----------------------------------------
+@app.route("/")
+def home():
+    return render_template("index.html")
+
+
+@app.route("/pacientes")
+def lista_pacientes():
+    conn = sqlite3.connect("banco.db")
+    cur = conn.cursor()
+    cur.execute("SELECT * FROM pacientes")
+    dados = cur.fetchall()
+    conn.close()
+    return render_template("pacientes.html", pacientes=dados)
+
+
+@app.route("/consultas")
+def lista_consultas():
+    conn = sqlite3.connect("banco.db")
+    cur = conn.cursor()
+    cur.execute("""
+        SELECT consultas.id, pacientes.nome, consultas.data, consultas.hora, consultas.especialidade 
+        FROM consultas 
+        JOIN pacientes ON pacientes.id = consultas.paciente_id
+    """)
+    dados = cur.fetchall()
+
+    cur.execute("SELECT id, nome FROM pacientes")
+    pacientes = cur.fetchall()
+    conn.close()
+
+    return render_template("consultas.html", consultas=dados, pacientes=pacientes)
+
+
+# -----------------------------------------
+# CADASTRO DE PACIENTE
+# -----------------------------------------
+@app.route("/add_paciente", methods=["POST"])
+def add_paciente():
+    nome = request.form["nome"]
+    telefone = request.form["telefone"]
+    cpf = request.form["cpf"]
+    email = request.form["email"]
+
+    conn = sqlite3.connect("banco.db")
+    cur = conn.cursor()
+    cur.execute("INSERT INTO pacientes (nome, telefone, cpf, email) VALUES (?, ?, ?, ?)",
+                (nome, telefone, cpf, email))
+    conn.commit()
+    conn.close()
+    return redirect("/pacientes")
+
+
+# -----------------------------------------
+# CADASTRO DE CONSULTA
+# -----------------------------------------
+@app.route("/add_consulta", methods=["POST"])
+def add_consulta():
+    paciente_id = request.form["paciente_id"]
+    data = request.form["data"]
+    hora = request.form["hora"]
+    especialidade = request.form["especialidade"]
+
+    conn = sqlite3.connect("banco.db")
+    cur = conn.cursor()
+    cur.execute("INSERT INTO consultas (paciente_id, data, hora, especialidade) VALUES (?, ?, ?, ?)",
+                (paciente_id, data, hora, especialidade))
+    conn.commit()
+    conn.close()
+
+    return redirect("/consultas")
+
+
+# -----------------------------------------
+# EXCLUIR PACIENTE
+# -----------------------------------------
+@app.route("/delete_paciente/<int:id>")
+def delete_paciente(id):
+    conn = sqlite3.connect("banco.db")
+    cur = conn.cursor()
+    cur.execute("DELETE FROM pacientes WHERE id=?", (id,))
+    conn.commit()
+    conn.close()
+    return redirect("/pacientes")
+
+
+# -----------------------------------------
+# EXCLUIR CONSULTA
+# -----------------------------------------
+@app.route("/delete_consulta/<int:id>")
+def delete_consulta(id):
+    conn = sqlite3.connect("banco.db")
+    cur = conn.cursor()
+    cur.execute("DELETE FROM consultas WHERE id=?", (id,))
+    conn.commit()
+    conn.close()
+    return redirect("/consultas")
+
+
+# INICIAR BANCO E SERVIDOR
+if __name__ == "__main__":
+    init_db()
+    app.run(debug=True)
